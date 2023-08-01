@@ -62,10 +62,21 @@ Sections
 
   name: .data
   ...
+ 
+Imports
+  ImportDescriptors:
+    OriginalFirstThunk: 32848, IsBound: false, TimeDateStamp: 0, ForwarderChain: 0, Name: KERNEL32.dll, FirstThunk: 33064
+    OriginalFirstThunk: 32924, IsBound: false, TimeDateStamp: 0, ForwarderChain: 0, Name: msvcrt.dll, FirstThunk: 33140
+    OriginalFirstThunk: 32936, IsBound: false, TimeDateStamp: 0, ForwarderChain: 0, Name: msvcrt.dll, FirstThunk: 33152
 ```
 
 ## TODO
 - [ ] Support Imports
+  - [x] Import Descriptors
+  - [ ] Bound Imports
+  - [ ] Import Lookup Table
+  - [ ] Import Address Table
+- [ ] Support Exports
 - [ ] Support Relocations
 - [ ] Add more tests
 - [ ] Add more documents
