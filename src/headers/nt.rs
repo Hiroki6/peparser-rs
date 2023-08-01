@@ -1,4 +1,4 @@
-use crate::parse;
+use crate::{errors, parse};
 use chrono::{DateTime, Utc};
 use derive_try_from_primitive::TryFromPrimitive;
 use nom::{
@@ -78,11 +78,9 @@ impl FileHeader {
             context("characteristics", le_u16),
         ))(i)?;
 
-        let datetime: DateTime<Utc> = DateTime::from_utc(
-            // @todo error handling
-            chrono::NaiveDateTime::from_timestamp_opt(timestamp as i64, 0).unwrap(),
-            Utc,
-        );
+        let timestamp = chrono::NaiveDateTime::from_timestamp_opt(timestamp as i64, 0)
+            .ok_or(errors::PEError::from_string(i, "wrong timestamp format"))?;
+        let datetime: DateTime<Utc> = DateTime::from_utc(timestamp, Utc);
 
         Ok((
             i,
@@ -160,10 +158,10 @@ impl OptionalHeader {
                 let (i, optional_header) = OptionalHeader64::parse(i)?;
                 Ok((i, OptionalHeader::Op64(optional_header)))
             }
-            OptionalHeaderMagic::Rom => {
-                // @todo error handling
-                panic!("ROM Images are not supported")
-            }
+            OptionalHeaderMagic::Rom => Err(errors::PEError::from_string(
+                i,
+                "ROM Images are not supported",
+            )),
         }
     }
 }
@@ -531,8 +529,9 @@ fn parse_data_directories(input: &[u8], count: usize) -> parse::Result<Vec<Image
     let mut directories = Vec::new();
     let mut input = input;
     for i in 0..count {
-        // @todo error handling
-        let entry = ImageDirectoryEntry::try_from(i).unwrap();
+        let entry = ImageDirectoryEntry::try_from(i).map_err(|e| {
+            errors::PEError::from_string(input, format!("unknown image directory. {}", e))
+        })?;
         let (new_input, directory) = parse_image_data_directory(entry, input)?;
         directories.push(directory);
         input = new_input;

@@ -4,7 +4,7 @@ use nom::{bytes::complete::take, error::context, sequence::tuple};
 use std::fmt;
 use std::fmt::Formatter;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Sections(pub Vec<Section>);
 
 impl Sections {
@@ -19,9 +19,36 @@ impl Sections {
 
         Ok((i, Sections(sections)))
     }
+
+    pub fn find_by_name(self, name: &str) -> Option<Section> {
+        self.0.into_iter().find(|section| section.name == name)
+    }
 }
 
-#[derive(Debug)]
+/// Enum representing common section names in a Portable Executable.
+pub enum SectionName {
+    Text,
+    Data,
+    Rdata,
+    Bss,
+    Idata,
+    Tls,
+}
+
+impl SectionName {
+    pub fn as_str(&self) -> &str {
+        match *self {
+            SectionName::Text => ".text",
+            SectionName::Data => ".data",
+            SectionName::Rdata => ".rdata",
+            SectionName::Bss => ".bss",
+            SectionName::Idata => ".idata",
+            SectionName::Tls => ".tls",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Section {
     pub name: String,
     pub vir_size: u32,
@@ -81,6 +108,14 @@ impl Section {
         };
 
         Ok((i, section))
+    }
+
+    pub fn rva_to_offset(&self, rva: u32) -> Option<u32> {
+        if rva >= self.vir_addr {
+            Some(rva - self.vir_addr + self.ptr_to_raw_data)
+        } else {
+            None
+        }
     }
 }
 

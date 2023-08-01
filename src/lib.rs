@@ -1,36 +1,31 @@
+mod errors;
 mod headers;
+mod imports;
 mod parse;
 
+use crate::headers::PEHeader;
+use crate::imports::Imports;
 use std::fmt;
 
 #[derive(Debug)]
 pub struct PE<'a> {
-    pub dos_header: headers::dos::DosHeader<'a>,
-    pub nt_header: headers::nt::NTHeader<'a>,
-    pub sections: headers::sections::Sections,
+    pub header: PEHeader<'a>,
+    pub imports: Imports,
 }
 
 impl<'a> PE<'a> {
-    pub fn parse(i: parse::Input<'a>) -> parse::Result<Self> {
-        let (i, dos_header) = headers::dos::DosHeader::parse(i)?;
-        let (i, nt_header) = headers::nt::NTHeader::parse(i)?;
-        let (i, sections) =
-            headers::sections::Sections::parse(i, nt_header.file_header.num_of_sections)?;
-        Ok((
-            i,
-            Self {
-                dos_header,
-                nt_header,
-                sections,
-            },
-        ))
+    pub fn parse(input: parse::Input<'a>) -> parse::Result<Self> {
+        let (i, header) = PEHeader::parse(input)?;
+        // @todo wants to avoid clone
+        let (_, imports) = Imports::parse(input, header.sections.clone())?;
+
+        Ok((i, Self { header, imports }))
     }
 }
 
 impl<'a> fmt::Display for PE<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "{}", self.dos_header)?;
-        writeln!(f, "{}", self.nt_header)?;
-        writeln!(f, "{}", self.sections)
+        writeln!(f, "{}", self.header)?;
+        writeln!(f, "{}", self.imports)
     }
 }
