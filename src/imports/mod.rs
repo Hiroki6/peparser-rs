@@ -1,3 +1,4 @@
+use crate::headers::nt::ImageDataDirectory;
 use crate::headers::sections::Sections;
 use crate::imports::import_descriptor::ImportDescriptors;
 use crate::parse;
@@ -12,8 +13,12 @@ pub struct Imports {
 }
 
 impl Imports {
-    pub fn parse(input: parse::Input, sections: Sections) -> parse::Result<Self> {
-        let (_, descriptors) = ImportDescriptors::parse(input, sections)?;
+    pub fn parse(
+        input: parse::Input,
+        import_directory: ImageDataDirectory,
+        sections: Sections,
+    ) -> parse::Result<Self> {
+        let (_, descriptors) = ImportDescriptors::parse(input, import_directory, sections)?;
 
         let imports = Self { descriptors };
 

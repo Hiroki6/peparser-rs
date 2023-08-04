@@ -25,7 +25,7 @@ impl<'a> NTHeader<'a> {
     const SIGNAUTRE: &'static [u8] = &[0x50, 0x45, 0x00, 0x00];
 
     pub fn parse(i: parse::Input<'a>) -> parse::Result<Self> {
-        let (i, (signature,)) = tuple((context("signature", tag(Self::SIGNAUTRE)),))(i)?;
+        let (i, (signature,)) = tuple((context("Signature", tag(Self::SIGNAUTRE)),))(i)?;
 
         let (i, file_header) = FileHeader::parse(i)?;
 
@@ -275,7 +275,8 @@ impl OptionalHeader32 {
             context("NumberOfRvaAndSizes", le_u32),
         ))(i)?;
 
-        let (i, data_directories) = parse_data_directories(i, number_of_rva_and_sizes as usize)?;
+        let (i, data_directories) =
+            ImageDataDirectories::parse(i, number_of_rva_and_sizes as usize)?;
 
         Ok((
             i,
@@ -310,7 +311,7 @@ impl OptionalHeader32 {
                 size_of_heap_commit,
                 loader_flags,
                 number_of_rva_and_sizes,
-                data_directories: ImageDataDirectories(data_directories),
+                data_directories,
             },
         ))
     }
@@ -422,7 +423,8 @@ impl OptionalHeader64 {
             context("NumberOfRvaAndSizes", le_u32),
         ))(i)?;
 
-        let (i, data_directories) = parse_data_directories(i, number_of_rva_and_sizes as usize)?;
+        let (i, data_directories) =
+            ImageDataDirectories::parse(i, number_of_rva_and_sizes as usize)?;
 
         Ok((
             i,
@@ -456,7 +458,7 @@ impl OptionalHeader64 {
                 size_of_heap_commit,
                 loader_flags,
                 number_of_rva_and_sizes,
-                data_directories: ImageDataDirectories(data_directories),
+                data_directories,
             },
         ))
     }
@@ -480,10 +482,51 @@ impl OptionalHeaderMagic {
 }
 
 #[derive(Debug)]
-struct ImageDataDirectory {
-    entry: ImageDirectoryEntry,
-    virtual_address: u32,
-    size: u32,
+pub struct ImageDataDirectories(Vec<ImageDataDirectory>);
+
+impl ImageDataDirectories {
+    fn parse(input: parse::Input, count: usize) -> parse::Result<Self> {
+        let mut directories = Vec::new();
+        let mut input = input;
+        for i in 0..count {
+            let entry = ImageDirectoryEntry::try_from(i).map_err(|e| {
+                errors::PEError::from_string(input, format!("unknown image directory. {}", e))
+            })?;
+            let (new_input, directory) = ImageDataDirectory::parse(entry, input)?;
+            directories.push(directory);
+            input = new_input;
+        }
+        Ok((input, Self(directories)))
+    }
+
+    pub fn find_by_entry(&self, entry: ImageDirectoryEntry) -> Option<ImageDataDirectory> {
+        if entry.value() >= self.0.len() {
+            None
+        } else {
+            Some(self.0[entry.value() as usize])
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ImageDataDirectory {
+    pub entry: ImageDirectoryEntry,
+    pub virtual_address: u32,
+    pub size: u32,
+}
+
+impl ImageDataDirectory {
+    pub fn parse(entry: ImageDirectoryEntry, input: parse::Input) -> parse::Result<Self> {
+        let (input, (virtual_address, size)) = tuple((le_u32, le_u32))(input)?;
+        Ok((
+            input,
+            Self {
+                entry,
+                virtual_address,
+                size,
+            },
+        ))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromPrimitive, Display)]
@@ -507,36 +550,10 @@ pub enum ImageDirectoryEntry {
     Reserved = 15,
 }
 
-#[derive(Debug)]
-pub struct ImageDataDirectories(Vec<ImageDataDirectory>);
-
-fn parse_image_data_directory(
-    entry: ImageDirectoryEntry,
-    input: &[u8],
-) -> parse::Result<ImageDataDirectory> {
-    let (input, (virtual_address, size)) = tuple((le_u32, le_u32))(input)?;
-    Ok((
-        input,
-        ImageDataDirectory {
-            entry,
-            virtual_address,
-            size,
-        },
-    ))
-}
-
-fn parse_data_directories(input: &[u8], count: usize) -> parse::Result<Vec<ImageDataDirectory>> {
-    let mut directories = Vec::new();
-    let mut input = input;
-    for i in 0..count {
-        let entry = ImageDirectoryEntry::try_from(i).map_err(|e| {
-            errors::PEError::from_string(input, format!("unknown image directory. {}", e))
-        })?;
-        let (new_input, directory) = parse_image_data_directory(entry, input)?;
-        directories.push(directory);
-        input = new_input;
+impl ImageDirectoryEntry {
+    fn value(&self) -> usize {
+        *self as usize
     }
-    Ok((input, directories))
 }
 
 impl<'a> fmt::Display for NTHeader<'a> {

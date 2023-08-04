@@ -1,4 +1,5 @@
 use crate::parse;
+use nom::number::complete::le_u32;
 use nom::{
     bytes::complete::{tag, take},
     error::context,
@@ -29,7 +30,7 @@ pub struct DosHeader<'a> {
     pub oemid: u16,
     pub oeminfo: u16,
     pub res2: &'a [u8],
-    pub lfanew: &'a [u8],
+    pub lfanew: u32,
 }
 
 impl<'a> DosHeader<'a> {
@@ -79,7 +80,7 @@ impl<'a> DosHeader<'a> {
             context("oemid", le_u16),
             context("oeminfo", le_u16),
             context("res2", take(20usize)),
-            context("lfanew", take(4usize)),
+            context("lfanew", le_u32),
             context("stub", take(64usize)),
         ))(i)?;
 

@@ -72,10 +72,11 @@ Imports
 
 ## TODO
 - [ ] Support Imports
-  - [x] Import Descriptors
+  - [ ] Import Descriptors by using Import Directory
   - [ ] Bound Imports
-  - [ ] Import Lookup Table
-  - [ ] Import Address Table
+  - [x] Import Lookup Table
+  - [x] Import Address Table
+- [ ] Support RichHeader 
 - [ ] Support Exports
 - [ ] Support Relocations
 - [ ] Add more tests

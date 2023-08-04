@@ -23,6 +23,13 @@ impl Sections {
     pub fn find_by_name(self, name: &str) -> Option<Section> {
         self.0.into_iter().find(|section| section.name == name)
     }
+
+    /// find the section including the addr
+    pub fn find_by_address(self, addr: u32) -> Option<Section> {
+        self.0
+            .into_iter()
+            .find(|section| addr >= section.vir_addr && addr < section.vir_addr + section.vir_size)
+    }
 }
 
 /// Enum representing common section names in a Portable Executable.
