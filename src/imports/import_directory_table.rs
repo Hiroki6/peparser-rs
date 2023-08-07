@@ -1,7 +1,7 @@
-use crate::headers::sections::{Section, SectionName, Sections};
-use crate::parse;
+use crate::headers::sections::{Section, Sections};
+use crate::{parse, utils};
 
-use crate::headers::nt::ImageDataDirectory;
+use crate::headers::nt::DataDirectory;
 use byteorder::{ByteOrder, LittleEndian};
 use nom::error::context;
 use nom::number::complete::le_u32;
@@ -10,19 +10,19 @@ use std::fmt;
 use std::fmt::Formatter;
 
 #[derive(Debug)]
-pub struct ImportDescriptors(Vec<ImportDescriptor>);
+pub struct ImportDirectoryTable(Vec<ImportDescriptor>);
 
-impl ImportDescriptors {
+impl ImportDirectoryTable {
     pub fn parse(
         pe_file: parse::Input,
-        import_directory: ImageDataDirectory,
+        import_directory: DataDirectory,
         sections: Sections,
     ) -> parse::Result<Self> {
         match sections.find_by_address(import_directory.virtual_address) {
             Some(section) => {
                 let offset = section
                     .rva_to_offset(import_directory.virtual_address)
-                    .unwrap();
+                    .unwrap(); // @todo remove it
                 let section_data = &pe_file[offset as usize..];
                 let mut res = Vec::new();
                 let mut cur_input = section_data;
@@ -43,19 +43,19 @@ impl ImportDescriptors {
                     cur_input = i;
                 }
 
-                Ok((cur_input, ImportDescriptors(res)))
+                Ok((cur_input, ImportDirectoryTable(res)))
             }
             None => {
                 let empty = vec![];
-                Ok((pe_file, ImportDescriptors(empty)))
+                Ok((pe_file, ImportDirectoryTable(empty)))
             }
         }
     }
 }
 
-impl fmt::Display for ImportDescriptors {
+impl fmt::Display for ImportDirectoryTable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "  ImportDescriptors:")?;
+        writeln!(f, "  ImportDirectoryTable:")?;
         for d in &self.0 {
             writeln!(f, "{}", d)?;
         }
@@ -108,18 +108,43 @@ impl ImportDescriptor {
         Ok((i, descriptor))
     }
 
+    /// This function is used to convert a null-terminated C string to a Rust String.
+    /// It scans the input byte slice for the null terminator (0), then splits the byte slice at that position.
+    /// The first part (up to the null terminator) is interpreted as a UTF-8 string using `from_utf8_lossy`,
+    /// which replaces any invalid UTF-8 sequences with the Unicode replacement character.
+    /// The second part (after the null terminator) is returned along with the constructed string.
+    ///
+    /// Args:
+    /// * `input`: A byte slice that represents the input data from which to extract the C string.
+    ///
+    /// Returns:
+    /// A nom `IResult` that contains the remainder of the input byte slice after the null terminator,
+    /// and the string that was constructed from the bytes up to the null terminator.
     fn read_c_string(input: &[u8]) -> nom::IResult<&[u8], String> {
         let pos = input.iter().position(|&c| c == 0).unwrap_or(input.len());
         let (head, tail) = input.split_at(pos);
-        let string = String::from_utf8_lossy(head); // Handle the Result properly in your code
+        let string = String::from_utf8_lossy(head);
         let (_, tail) = tail.split_at(1); // Skip the null terminator
         Ok((tail, string.to_string()))
     }
 
+
+    /// This function is used to get the name of a DLL from a byte slice, given the relative virtual address (RVA)
+    /// of the DLL's name and the section in which the DLL is defined.
+    /// It first converts the RVA to a file offset using the provided section,
+    /// then reads a C string from that offset in the input byte slice.
+    ///
+    /// Args:
+    /// * `input`: A byte slice that represents the input data from which to extract the DLL name.
+    /// * `name_rva`: The relative virtual address at which the DLL's name is stored.
+    /// * `section`: The section of the PE file in which the DLL is defined.
+    ///
+    /// Returns:
+    /// The name of the DLL, or `None` if the DLL's name could not be read for any reason.
     fn get_dll_name(input: &[u8], name_rva: u32, section: &Section) -> Option<String> {
-        section.rva_to_offset(name_rva).map(|offset| {
-            let (_, name) = Self::read_c_string(&input[offset as usize..]).unwrap(); // Handle the Result properly in your code
-            name
+        section.rva_to_offset(name_rva).and_then(|offset| {
+            let name = Self::read_c_string(&input[offset as usize..]).ok();
+            name.map(|n| n.1)
         })
     }
 }
@@ -136,11 +161,8 @@ impl ImportByNames {
                 // original import case
                 // @todo figure out what I should do
                 ()
-            } else {
-                match ImportByName::parse(pe_file, entry, section) {
-                    Some(import_by_name) => import_by_names.push(import_by_name),
-                    None => (),
-                }
+            } else if let Some(import_by_name) = ImportByName::parse(pe_file, entry, section) {
+                import_by_names.push(import_by_name)
             }
         }
         Self(import_by_names)
@@ -177,15 +199,9 @@ impl ImportByName {
     pub fn parse(pe_file: parse::Input, rva: u32, section: &Section) -> Option<ImportByName> {
         section.rva_to_offset(rva).map(|offset| {
             let hint = LittleEndian::read_u16(&pe_file[offset as usize..]);
-            let name = Self::read_null_terminated_string(&pe_file[(offset as usize + 2)..]);
+            let name = utils::read_null_terminated_string(&pe_file[(offset as usize + 2)..]);
             Self { hint, name }
         })
-    }
-
-    // Function to read a null-terminated string from a slice
-    fn read_null_terminated_string(slice: &[u8]) -> String {
-        let len = slice.iter().position(|&c| c == 0).unwrap_or(slice.len());
-        String::from_utf8_lossy(&slice[0..len]).into_owned()
     }
 }
 

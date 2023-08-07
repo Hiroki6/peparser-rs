@@ -14,7 +14,7 @@ pub struct PEHeader<'a> {
 
 impl<'a> PEHeader<'a> {
     pub fn parse(pe_file: parse::Input<'a>) -> parse::Result<Self> {
-        let (i, dos_header) = dos::DosHeader::parse(pe_file)?;
+        let (_, dos_header) = dos::DosHeader::parse(pe_file)?;
         // lfanew value is the offset of the PE signature
         let (i, nt_header) = nt::NTHeader::parse(&pe_file[dos_header.lfanew as usize..])?;
         let (i, sections) = sections::Sections::parse(i, nt_header.file_header.num_of_sections)?;

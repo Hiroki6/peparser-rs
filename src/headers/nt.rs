@@ -70,12 +70,12 @@ impl FileHeader {
                 characteristics,
             ),
         ) = tuple((
-            context("numOfSections", le_u16),
-            context("timestamp", le_u32),
-            context("ptrToSymbolTable", le_u32),
-            context("numOfSymbols", le_u32),
-            context("sizeOfHeader", le_u16),
-            context("characteristics", le_u16),
+            context("NumOfSections", le_u16),
+            context("Timestamp", le_u32),
+            context("PtrToSymbolTable", le_u32),
+            context("NumOfSymbols", le_u32),
+            context("SizeOfHeader", le_u16),
+            context("Characteristics", le_u16),
         ))(i)?;
 
         let timestamp = chrono::NaiveDateTime::from_timestamp_opt(timestamp as i64, 0)
@@ -164,6 +164,13 @@ impl OptionalHeader {
             )),
         }
     }
+
+    pub fn find_directory_by_entry(&self, entry: DirectoryEntry) -> Option<DataDirectory> {
+        match self {
+            Self::Op32(ref op_header) => op_header.data_directories.find_by_entry(entry),
+            Self::Op64(ref op_header) => op_header.data_directories.find_by_entry(entry),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -198,7 +205,7 @@ pub struct OptionalHeader32 {
     pub size_of_heap_commit: u32,
     pub loader_flags: u32,
     pub number_of_rva_and_sizes: u32,
-    pub data_directories: ImageDataDirectories,
+    pub data_directories: DataDirectories,
 }
 
 impl OptionalHeader32 {
@@ -275,8 +282,7 @@ impl OptionalHeader32 {
             context("NumberOfRvaAndSizes", le_u32),
         ))(i)?;
 
-        let (i, data_directories) =
-            ImageDataDirectories::parse(i, number_of_rva_and_sizes as usize)?;
+        let (i, data_directories) = DataDirectories::parse(i, number_of_rva_and_sizes as usize)?;
 
         Ok((
             i,
@@ -348,7 +354,7 @@ pub struct OptionalHeader64 {
     pub size_of_heap_commit: u64,
     pub loader_flags: u32,
     pub number_of_rva_and_sizes: u32,
-    pub data_directories: ImageDataDirectories,
+    pub data_directories: DataDirectories,
 }
 
 impl OptionalHeader64 {
@@ -423,8 +429,7 @@ impl OptionalHeader64 {
             context("NumberOfRvaAndSizes", le_u32),
         ))(i)?;
 
-        let (i, data_directories) =
-            ImageDataDirectories::parse(i, number_of_rva_and_sizes as usize)?;
+        let (i, data_directories) = DataDirectories::parse(i, number_of_rva_and_sizes as usize)?;
 
         Ok((
             i,
@@ -482,41 +487,41 @@ impl OptionalHeaderMagic {
 }
 
 #[derive(Debug)]
-pub struct ImageDataDirectories(Vec<ImageDataDirectory>);
+pub struct DataDirectories(Vec<DataDirectory>);
 
-impl ImageDataDirectories {
+impl DataDirectories {
     fn parse(input: parse::Input, count: usize) -> parse::Result<Self> {
         let mut directories = Vec::new();
         let mut input = input;
         for i in 0..count {
-            let entry = ImageDirectoryEntry::try_from(i).map_err(|e| {
+            let entry = DirectoryEntry::try_from(i).map_err(|e| {
                 errors::PEError::from_string(input, format!("unknown image directory. {}", e))
             })?;
-            let (new_input, directory) = ImageDataDirectory::parse(entry, input)?;
+            let (new_input, directory) = DataDirectory::parse(entry, input)?;
             directories.push(directory);
             input = new_input;
         }
         Ok((input, Self(directories)))
     }
 
-    pub fn find_by_entry(&self, entry: ImageDirectoryEntry) -> Option<ImageDataDirectory> {
+    pub fn find_by_entry(&self, entry: DirectoryEntry) -> Option<DataDirectory> {
         if entry.value() >= self.0.len() {
             None
         } else {
-            Some(self.0[entry.value() as usize])
+            Some(self.0[entry.value()])
         }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ImageDataDirectory {
-    pub entry: ImageDirectoryEntry,
+pub struct DataDirectory {
+    pub entry: DirectoryEntry,
     pub virtual_address: u32,
     pub size: u32,
 }
 
-impl ImageDataDirectory {
-    pub fn parse(entry: ImageDirectoryEntry, input: parse::Input) -> parse::Result<Self> {
+impl DataDirectory {
+    pub fn parse(entry: DirectoryEntry, input: parse::Input) -> parse::Result<Self> {
         let (input, (virtual_address, size)) = tuple((le_u32, le_u32))(input)?;
         Ok((
             input,
@@ -531,7 +536,7 @@ impl ImageDataDirectory {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromPrimitive, Display)]
 #[repr(usize)]
-pub enum ImageDirectoryEntry {
+pub enum DirectoryEntry {
     Export = 0,
     Import = 1,
     Resource = 2,
@@ -550,7 +555,7 @@ pub enum ImageDirectoryEntry {
     Reserved = 15,
 }
 
-impl ImageDirectoryEntry {
+impl DirectoryEntry {
     fn value(&self) -> usize {
         *self as usize
     }
@@ -741,7 +746,7 @@ impl fmt::Display for OptionalHeader64 {
     }
 }
 
-impl fmt::Display for ImageDataDirectories {
+impl fmt::Display for DataDirectories {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Entry Address Size")?;
         for (_, dir) in self.0.iter().enumerate() {
@@ -751,7 +756,7 @@ impl fmt::Display for ImageDataDirectories {
     }
 }
 
-impl fmt::Display for ImageDataDirectory {
+impl fmt::Display for DataDirectory {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
