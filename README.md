@@ -64,19 +64,32 @@ Sections
   ...
  
 Imports
-  ImportDescriptors:
+  ImportDirectoryTable:
     OriginalFirstThunk: 32848, IsBound: false, TimeDateStamp: 0, ForwarderChain: 0, Name: KERNEL32.dll, FirstThunk: 33064
+      ImportByNames:
+        hint: 207, name: DeleteCriticalSection
+        hint: 236, name: EnterCriticalSection
+        hint: 279, name: ExitProcess
+        ...
+        
     OriginalFirstThunk: 32924, IsBound: false, TimeDateStamp: 0, ForwarderChain: 0, Name: msvcrt.dll, FirstThunk: 33140
+      ImportByNames:
+        hint: 80, name: _strdup
+        ...
+           
     OriginalFirstThunk: 32936, IsBound: false, TimeDateStamp: 0, ForwarderChain: 0, Name: msvcrt.dll, FirstThunk: 33152
+      ...
 ```
 
 ## TODO
 - [ ] Support Imports
-  - [x] Import Descriptors
+  - [x] Import Descriptors by using Import Directory
   - [ ] Bound Imports
-  - [ ] Import Lookup Table
-  - [ ] Import Address Table
+  - [ ] Import by Name
+- [ ] Support RichHeader 
 - [ ] Support Exports
+  - [x] Export Directory Table
+  - [ ] Export Functions
 - [ ] Support Relocations
 - [ ] Add more tests
 - [ ] Add more documents
